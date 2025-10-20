@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세계 주요도시 월별 기온 지도</title>
+    
+    <!-- Leaflet.js 라이브러리 (지도 API) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+    
+    <!-- Paperlogy Web Font -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/subsets/Paperlogy-dynamic-subset.css" type="text/css">
+
+    <style>
+        /* 기본 페이지 스타일 */
+        body {
+            font-family: 'Paperlogy', 'Inter', 'Malgun Gothic', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f7f9fc;
+            color: #333;
+        }
+        
+        /* 헤더 스타일 */
+        header {
+            background-color: #ffffff;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            z-index: 1001;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.75em;
+            color: #2c3e50;
+            white-space: nowrap;
+        }
+
+        #controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* 드롭다운 및 검색창 스타일 */
+        #city-select, #search-input {
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+            font-family: 'Paperlogy', sans-serif;
+            transition: all 0.3s ease;
+            background-color: #fdfdfd;
+        }
+        #city-select:focus, #search-input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        #search-input {
+             width: 250px;
+        }
+
+        /* 지도 컨테이너 스타일 */
+        #map {
+            flex-grow: 1;
+            background-color: #e9e9e9;
+        }
+
+        /* 날씨 정보 모달 창 스타일 */
+        #weather-modal {
+            display: none;
+            position: fixed;
+            z-index: 1002;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+        }
+
+        #weather-modal-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 0;
+            border: none;
+            width: 90%;
+            max-width: 600px;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+            animation: fadeIn 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            overflow: hidden;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        #modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 1.5rem 2rem;
+        }
+
+        #modal-city-name {
+            margin: 0;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        #modal-close {
+            color: #fff;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        #modal-close:hover {
+            opacity: 1;
+        }
+
+        #modal-body {
+            padding: 1.5rem 2rem 2rem;
+        }
+
+        /* 기온 데이터 테이블 스타일 */
+        #weather-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #weather-table th, #weather-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: center;
+        }
+
+        #weather-table th {
+            background-color: #f9f9f9;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .high-temp { color: #e74c3c; font-weight: bold; }
+        .low-temp { color: #3498db; font-weight: bold; }
+
+        /* 도시, 대륙, 국가 라벨 스타일 */
+        .city-label, .continent-label, .country-label {
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+            font-weight: bold;
+            text-shadow: 0 0 3px white, 0 0 3px white, 0 0 3px white;
+        }
+        .city-label { font-size: 12px; color: #003366; }
+        .continent-label { font-size: 20px; color: #666; pointer-events: none; }
+        .country-label { font-size: 15px; color: #8B4513; pointer-events: none; }
+
+        /* 알림 메시지 박스 스타일 */
+        #message-box {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #e74c3c;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            z-index: 2000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            transition: opacity 0.5s, transform 0.5s;
+            opacity: 0;
+            transform: translate(-50%, -20px);
+            pointer-events: none;
+        }
+        #message-box.show {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>세계 주요도시 날씨</h1>
+        <div id="controls">
+             <select id="city-select">
+                <option value="">-- 도시 선택 --</option>
+            </select>
+            <input type="text" id="search-input" placeholder="도시 이름 검색...">
+        </div>
+    </header>
+
+    <div id="map"></div>
+    <div id="message-box"></div>
+
+    <div id="weather-modal">
+        <div id="weather-modal-content">
+            <div id="modal-header">
+                <h2 id="modal-city-name"></h2>
+                <span id="modal-close">&times;</span>
+            </div>
+            <div id="modal-body">
+                <table id="weather-table">
+                    <thead>
+                        <tr>
+                            <th>월</th>
+                            <th>최고기온(°C)</th>
+                            <th>최저기온(°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- 한국인 인기 여행지 38곳 샘플 데이터 ---
+            const cityData = [
+                // 아시아
+                { name: '강릉', country: '대한민국', lat: 37.7519, lng: 128.8761, temps: [{month: '1월', high: 5.0, low: -2.3}, {month: '2월', high: 6.7, low: -1.1}, {month: '3월', high: 11.1, low: 2.9}, {month: '4월', high: 17.8, low: 8.3}, {month: '5월', high: 22.6, low: 13.3}, {month: '6월', high: 25.3, low: 17.8}, {month: '7월', high: 27.9, low: 21.5}, {month: '8월', high: 28.3, low: 21.8}, {month: '9월', high: 24.3, low: 17.1}, {month: '10월', high: 19.8, low: 11.2}, {month: '11월', high: 13.5, low: 5.5}, {month: '12월', high: 7.4, low: -0.3}] },
+                { name: '광주', country: '대한민국', lat: 35.1601, lng: 126.8514, temps: [{month: '1월', high: 5.3, low: -2.8}, {month: '2월', high: 7.5, low: -1.6}, {month: '3월', high: 13.0, low: 2.7}, {month: '4월', high: 19.6, low: 8.1}, {month: '5월', high: 24.4, low: 13.4}, {month: '6월', high: 27.5, low: 18.4}, {month: '7월', high: 29.6, low: 22.5}, {month: '8월', high: 30.7, low: 23.2}, {month: '9월', high: 26.9, low: 18.1}, {month: '10월', high: 21.5, low: 11.3}, {month: '11월', high: 14.4, low: 5.2}, {month: '12월', high: 7.7, low: -0.5}] },
+                { name: '대전', country: '대한민국', lat: 36.3504, lng: 127.3845, temps: [{month: '1월', high: 3.2, low: -5.4}, {month: '2월', high: 6.0, low: -3.5}, {month: '3월', high: 11.9, low: 1.5}, {month: '4월', high: 19.1, low: 7.4}, {month: '5월', high: 24.1, low: 12.7}, {month: '6월', high: 27.9, low: 17.9}, {month: '7월', high: 29.8, low: 21.8}, {month: '8월', high: 30.5, low: 22.2}, {month: '9월', high: 26.2, low: 16.7}, {month: '10월', high: 20.4, low: 9.5}, {month: '11월', high: 12.8, low: 2.9}, {month: '12월', high: 5.5, low: -3.1}] },
+                { name: '부산', country: '대한민국', lat: 35.1796, lng: 129.0756, temps: [{month: '1월', high: 7.8, low: 0.7}, {month: '2월', high: 9.8, low: 2.5}, {month: '3월', high: 13.4, low: 6.1}, {month: '4월', high: 18.2, low: 10.6}, {month: '5월', high: 21.7, low: 15.1}, {month: '6월', high: 24.4, low: 18.7}, {month: '7월', high: 27.6, low: 22.4}, {month: '8월', high: 29.4, low: 23.8}, {month: '9월', high: 26.3, low: 20.0}, {month: '10월', high: 22.4, low: 14.8}, {month: '11월', high: 16.3, low: 8.9}, {month: '12월', high: 10.5, low: 3.0}] },
+                { name: '서울', country: '대한민국', lat: 37.5665, lng: 126.9780, temps: [{month: '1월', high: 1.5, low: -5.9}, {month: '2월', high: 4.7, low: -3.4}, {month: '3월', high: 10.2, low: 1.6}, {month: '4월', high: 17.6, low: 7.8}, {month: '5월', high: 23.0, low: 13.2}, {month: '6월', high: 27.2, low: 18.2}, {month: '7월', high: 28.9, low: 21.9}, {month: '8월', high: 29.6, low: 22.4}, {month: '9월', high: 25.8, low: 17.2}, {month: '10월', high: 19.8, low: 10.3}, {month: '11월', high: 11.3, low: 3.2}, {month: '12월', high: 4.3, low: -3.4}] },
+                { name: '제주', country: '대한민국', lat: 33.4996, lng: 126.5312, temps: [{month: '1월', high: 8.3, low: 3.2}, {month: '2월', high: 9.4, low: 3.6}, {month: '3월', high: 12.8, low: 6.1}, {month: '4월', high: 17.5, low: 10.2}, {month: '5월', high: 21.6, low: 14.4}, {month: '6월', high: 24.8, low: 18.7}, {month: '7월', high: 29.0, low: 23.3}, {month: '8월', high: 29.8, low: 24.3}, {month: '9월', high: 25.8, low: 20.4}, {month: '10월', high: 21.3, low: 15.1}, {month: '11월', high: 16.0, low: 9.8}, {month: '12월', high: 11.0, low: 5.3}] },
+                { name: '오사카', country: '일본', lat: 34.6937, lng: 135.5023, temps: [{month: '1월', high: 9.5, low: 2.8}, {month: '2월', high: 10.2, low: 3.1}, {month: '3월', high: 13.7, low: 5.6}, {month: '4월', high: 19.9, low: 10.7}, {month: '5월', high: 24.5, low: 15.6}, {month: '6월', high: 27.8, low: 20}, {month: '7월', high: 31.6, low: 24.3}, {month: '8월', high: 33.4, low: 25.4}, {month: '9월', high: 29.3, low: 21.7}, {month: '10월', high: 23.3, low: 15.5}, {month: '11월', high: 17.6, low: 9.9}, {month: '12월', high: 12.3, low: 5.1}] },
+                { name: '도쿄', country: '일본', lat: 35.6895, lng: 139.6917, temps: [{month: '1월', high: 9.6, low: 0.9}, {month: '2월', high: 10.4, low: 1.7}, {month: '3월', high: 13.6, low: 4.4}, {month: '4월', high: 19.0, low: 9.4}, {month: '5월', high: 22.9, low: 14.0}, {month: '6월', high: 25.5, low: 18.0}, {month: '7월', high: 29.2, low: 21.8}, {month: '8월', high: 30.8, low: 23.0}, {month: '9월', high: 26.9, low: 19.7}, {month: '10월', high: 21.5, low: 14.2}, {month: '11월', high: 16.3, low: 8.3}, {month: '12월', high: 11.9, low: 3.5}] },
+                { name: '후쿠오카', country: '일본', lat: 33.5904, lng: 130.4017, temps: [{month: '1월', high: 9.8, low: 3.5}, {month: '2월', high: 10.6, low: 3.8}, {month: '3월', high: 14.2, low: 6.4}, {month: '4월', high: 19.5, low: 11.2}, {month: '5월', high: 23.7, low: 15.6}, {month: '6월', high: 26.9, low: 19.9}, {month: '7월', high: 30.9, low: 24.3}, {month: '8월', high: 32.1, low: 25.0}, {month: '9월', high: 28.3, low: 21.3}, {month: '10월', high: 23.4, low: 15.4}, {month: '11월', high: 17.8, low: 10.2}, {month: '12월', high: 12.5, low: 5.6}] },
+                { name: '삿포로', country: '일본', lat: 43.0618, lng: 141.3545, temps: [{month: '1월', high: -0.6, low: -7.0}, {month: '2월', high: 0.1, low: -6.6}, {month: '3월', high: 4.0, low: -2.9}, {month: '4월', high: 11.5, low: 3.2}, {month: '5월', high: 17.3, low: 8.3}, {month: '6월', high: 21.5, low: 12.9}, {month: '7월', high: 24.9, low: 17.3}, {month: '8월', high: 26.4, low: 19.1}, {month: '9월', high: 22.4, low: 14.2}, {month: '10월', high: 16.2, low: 7.5}, {month: '11월', high: 8.5, low: 1.3}, {month: '12월', high: 2.1, low: -4.1}] },
+                { name: '오키나와', country: '일본', lat: 26.2124, lng: 127.6792, temps: [{month: '1월', high: 19.5, low: 14.6}, {month: '2월', high: 19.8, low: 14.8}, {month: '3월', high: 21.7, low: 16.5}, {month: '4월', high: 24.1, low: 19.0}, {month: '5월', high: 26.7, low: 21.7}, {month: '6월', high: 29.4, low: 24.8}, {month: '7월', high: 31.8, low: 26.8}, {month: '8월', high: 31.5, low: 26.6}, {month: '9월', high: 30.4, low: 25.5}, {month: '10월', high: 27.9, low: 23.1}, {month: '11월', high: 24.6, low: 20.0}, {month: '12월', high: 21.2, low: 16.3}] },
+                { name: '방콕', country: '태국', lat: 13.7563, lng: 100.5018, temps: [{month: '1월', high: 32.0, low: 21.0}, {month: '2월', high: 32.7, low: 22.2}, {month: '3월', high: 33.7, low: 23.7}, {month: '4월', high: 34.9, low: 24.9}, {month: '5월', high: 34.0, low: 24.6}, {month: '6월', high: 33.1, low: 24.2}, {month: '7월', high: 32.7, low: 24.0}, {month: '8월', high: 32.5, low: 23.9}, {month: '9월', high: 32.3, low: 23.6}, {month: '10월', high: 32.0, low: 23.1}, {month: '11월', high: 31.9, low: 22.1}, {month: '12월', high: 31.3, low: 20.8}] },
+                { name: '치앙마이', country: '태국', lat: 18.7883, lng: 98.9853, temps: [{month: '1월', high: 29, low: 14}, {month: '2월', high: 32, low: 16}, {month: '3월', high: 35, low: 19}, {month: '4월', high: 36, low: 22}, {month: '5월', high: 34, low: 23}, {month: '6월', high: 32, low: 24}, {month: '7월', high: 31, low: 24}, {month: '8월', high: 31, low: 23}, {month: '9월', high: 31, low: 23}, {month: '10월', high: 31, low: 22}, {month: '11월', high: 29, low: 19}, {month: '12월', high: 28, low: 15}] },
+                { name: '다낭', country: '베트남', lat: 16.0544, lng: 108.2022, temps: [{month: '1월', high: 24.8, low: 18.5}, {month: '2월', high: 26.1, low: 19.8}, {month: '3월', high: 28.7, low: 21.5}, {month: '4월', high: 31.0, low: 23.3}, {month: '5월', high: 33.4, low: 24.9}, {month: '6월', high: 33.9, low: 25.5}, {month: '7월', high: 34.3, low: 25.3}, {month: '8월', high: 33.9, low: 25.5}, {month: '9월', high: 31.5, low: 24.1}, {month: '10월', high: 29.6, low: 22.9}, {month: '11월', high: 27.0, low: 21.6}, {month: '12월', high: 24.9, low: 19.3}] },
+                { name: '나트랑', country: '베트남', lat: 12.2388, lng: 109.1967, temps: [{month: '1월', high: 27, low: 22}, {month: '2월', high: 28, low: 22}, {month: '3월', high: 29, low: 23}, {month: '4월', high: 31, low: 25}, {month: '5월', high: 32, low: 26}, {month: '6월', high: 32, low: 26}, {month: '7월', high: 32, low: 26}, {month: '8월', high: 32, low: 26}, {month: '9월', high: 31, low: 25}, {month: '10월', high: 29, low: 24}, {month: '11월', high: 28, low: 23}, {month: '12월', high: 27, low: 22}] },
+                { name: '하노이', country: '베트남', lat: 21.0278, lng: 105.8342, temps: [{month: '1월', high: 20, low: 14}, {month: '2월', high: 21, low: 15}, {month: '3월', high: 24, low: 18}, {month: '4월', high: 28, low: 21}, {month: '5월', high: 32, low: 24}, {month: '6월', high: 33, low: 26}, {month: '7월', high: 33, low: 26}, {month: '8월', high: 32, low: 25}, {month: '9월', high: 31, low: 24}, {month: '10월', high: 28, low: 22}, {month: '11월', high: 25, low: 18}, {month: '12월', high: 22, low: 15}] },
+                { name: '타이베이', country: '대만', lat: 25.0330, lng: 121.5654, temps: [{month: '1월', high: 19.1, low: 13.9}, {month: '2월', high: 19.6, low: 14.2}, {month: '3월', high: 22.1, low: 15.8}, {month: '4월', high: 25.7, low: 19}, {month: '5월', high: 29.2, low: 22.3}, {month: '6월', high: 32.0, low: 24.6}, {month: '7월', high: 34.3, low: 26.3}, {month: '8월', high: 33.8, low: 26.1}, {month: '9월', high: 31.1, low: 24.2}, {month: '10월', high: 27.5, low: 21.8}, {month: '11월', high: 24.2, low: 18.7}, {month: '12월', high: 20.7, low: 15.3}] },
+                { name: '홍콩', country: '홍콩', lat: 22.3193, lng: 114.1694, temps: [{month: '1월', high: 18.6, low: 14.5}, {month: '2월', high: 18.9, low: 15.0}, {month: '3월', high: 21.4, low: 17.2}, {month: '4월', high: 25.0, low: 20.6}, {month: '5월', high: 28.4, low: 23.7}, {month: '6월', high: 30.2, low: 25.7}, {month: '7월', high: 31.4, low: 26.8}, {month: '8월', high: 31.1, low: 26.6}, {month: '9월', high: 30.1, low: 25.5}, {month: '10월', high: 27.8, low: 23.1}, {month: '11월', high: 24.1, low: 19.6}, {month: '12월', high: 20.2, low: 15.9}] },
+                { name: '싱가포르', country: '싱가포르', lat: 1.3521, lng: 103.8198, temps: [{month: '1월', high: 30.4, low: 23.9}, {month: '2월', high: 31.2, low: 24.1}, {month: '3월', high: 31.6, low: 24.4}, {month: '4월', high: 31.7, low: 24.8}, {month: '5월', high: 31.6, low: 25.0}, {month: '6월', high: 31.3, low: 24.9}, {month: '7월', high: 30.9, low: 24.6}, {month: '8월', high: 30.9, low: 24.6}, {month: '9월', high: 30.9, low: 24.4}, {month: '10월', high: 31.1, low: 24.2}, {month: '11월', high: 30.8, low: 24.0}, {month: '12월', high: 30.3, low: 23.8}] },
+                { name: '세부', country: '필리핀', lat: 10.3157, lng: 123.8854, temps: [{month: '1월', high: 29.9, low: 24.5}, {month: '2월', high: 30.2, low: 24.5}, {month: '3월', high: 31.2, low: 25.0}, {month: '4월', high: 32.3, low: 25.8}, {month: '5월', high: 32.9, low: 26.2}, {month: '6월', high: 32.1, low: 25.7}, {month: '7월', high: 31.5, low: 25.3}, {month: '8월', high: 31.7, low: 25.4}, {month: '9월', high: 31.7, low: 25.3}, {month: '10월', high: 31.4, low: 25.1}, {month: '11월', high: 31.1, low: 25.1}, {month: '12월', high: 30.4, low: 24.9}] },
+                { name: '코타키나발루', country: '말레이시아', lat: 5.9804, lng: 116.0735, temps: [{month: '1월', high: 30.4, low: 23.7}, {month: '2월', high: 30.7, low: 23.8}, {month: '3월', high: 31.5, low: 24.2}, {month: '4월', high: 32.2, low: 24.7}, {month: '5월', high: 32.1, low: 24.8}, {month: '6월', high: 31.8, low: 24.6}, {month: '7월', high: 31.5, low: 24.3}, {month: '8월', high: 31.5, low: 24.3}, {month: '9월', high: 31.3, low: 24.2}, {month: '10월', high: 31.0, low: 24.1}, {month: '11월', high: 30.9, low: 24.1}, {month: '12월', high: 30.7, low: 24.0}] },
+                { name: '발리', country: '인도네시아', lat: -8.6705, lng: 115.2126, temps: [{month: '1월', high: 31, low: 24}, {month: '2월', high: 31, low: 24}, {month: '3월', high: 31, low: 24}, {month: '4월', high: 32, low: 24}, {month: '5월', high: 31, low: 24}, {month: '6월', high: 30, low: 23}, {month: '7월', high: 29, low: 23}, {month: '8월', high: 29, low: 23}, {month: '9월', high: 30, low: 23}, {month: '10월', high: 31, low: 24}, {month: '11월', high: 31, low: 24}, {month: '12월', high: 31, low: 24}] },
+                { name: '베이징', country: '중국', lat: 39.9042, lng: 116.4074, temps: [{month: '1월', high: 2, low: -8}, {month: '2월', high: 5, low: -5}, {month: '3월', high: 12, low: 1}, {month: '4월', high: 20, low: 8}, {month: '5월', high: 26, low: 14}, {month: '6월', high: 30, low: 19}, {month: '7월', high: 31, low: 22}, {month: '8월', high: 30, low: 21}, {month: '9월', high: 26, low: 15}, {month: '10월', high: 19, low: 8}, {month: '11월', high: 10, low: 0}, {month: '12월', high: 3, low: -6}] },
+                { name: '상하이', country: '중국', lat: 31.2304, lng: 121.4737, temps: [{month: '1월', high: 8, low: 1}, {month: '2월', high: 10, low: 3}, {month: '3월', high: 14, low: 6}, {month: '4월', high: 20, low: 12}, {month: '5월', high: 25, low: 17}, {month: '6월', high: 28, low: 21}, {month: '7월', high: 32, low: 25}, {month: '8월', high: 32, low: 25}, {month: '9월', high: 28, low: 21}, {month: '10월', high: 23, low: 15}, {month: '11월', high: 17, low: 9}, {month: '12월', high: 11, low: 3}] },
+                // 미주
+                { name: '괌', country: '미국', lat: 13.4443, lng: 144.7937, temps: [{month: '1월', high: 29.4, low: 24.4}, {month: '2월', high: 29.4, low: 24.3}, {month: '3월', high: 29.9, low: 24.7}, {month: '4월', high: 30.7, low: 25.3}, {month: '5월', high: 31.1, low: 25.7}, {month: '6월', high: 31.1, low: 25.7}, {month: '7월', high: 30.6, low: 25.2}, {month: '8월', high: 30.4, low: 25.1}, {month: '9월', high: 30.4, low: 24.9}, {month: '10월', high: 30.4, low: 25.1}, {month: '11월', high: 30.3, low: 25.3}, {month: '12월', high: 29.8, low: 24.9}] },
+                { name: '하와이', country: '미국', lat: 21.3069, lng: -157.8583, temps: [{month: '1월', high: 26.7, low: 19.1}, {month: '2월', high: 26.8, low: 19.3}, {month: '3월', high: 27.3, low: 20.2}, {month: '4월', high: 28.2, low: 21.1}, {month: '5월', high: 29.2, low: 22.1}, {month: '6월', high: 30.1, low: 23.2}, {month: '7월', high: 30.7, low: 23.9}, {month: '8월', high: 31.2, low: 24.2}, {month: '9월', high: 31.1, low: 23.9}, {month: '10월', high: 30.3, low: 23.1}, {month: '11월', high: 28.7, low: 21.9}, {month: '12월', high: 27.3, low: 20.1}] },
+                { name: '뉴욕', country: '미국', lat: 40.7128, lng: -74.0060, temps: [{month: '1월', high: 3.5, low: -2.8}, {month: '2월', high: 5.3, low: -1.7}, {month: '3월', high: 9.8, low: 2.1}, {month: '4월', high: 16.2, low: 7.1}, {month: '5월', high: 21.6, low: 12.2}, {month: '6월', high: 26.3, low: 17.6}, {month: '7월', high: 28.9, low: 20.4}, {month: '8월', high: 28.1, low: 19.9}, {month: '9월', high: 24.0, low: 16.0}, {month: '10월', high: 17.7, low: 9.9}, {month: '11월', high: 11.8, low: 4.9}, {month: '12월', high: 6.1, low: 0.0}] },
+                { name: '로스앤젤레스', country: '미국', lat: 34.0522, lng: -118.2437, temps: [{month: '1월', high: 20.0, low: 8.8}, {month: '2월', high: 20.3, low: 9.6}, {month: '3월', high: 21.2, low: 10.8}, {month: '4월', high: 22.8, low: 12.6}, {month: '5월', high: 23.9, low: 14.7}, {month: '6월', high: 26.1, low: 16.7}, {month: '7월', high: 28.9, low: 18.6}, {month: '8월', high: 29.4, low: 19.0}, {month: '9월', high: 28.5, low: 18.0}, {month: '10월', high: 26.1, low: 15.3}, {month: '11월', high: 22.8, low: 11.6}, {month: '12월', high: 19.7, low: 8.8}] },
+                { name: '밴쿠버', country: '캐나다', lat: 49.2827, lng: -123.1207, temps: [{month: '1월', high: 6.9, low: 1.4}, {month: '2월', high: 8.2, low: 1.6}, {month: '3월', high: 10.3, low: 3.4}, {month: '4월', high: 13.2, low: 5.6}, {month: '5월', high: 16.7, low: 8.8}, {month: '6월', high: 19.6, low: 11.7}, {month: '7월', high: 22.2, low: 13.7}, {month: '8월', high: 22.2, low: 13.8}, {month: '9월', high: 19.3, low: 10.8}, {month: '10월', high: 13.5, low: 6.6}, {month: '11월', high: 9.2, low: 3.5}, {month: '12월', high: 6.3, low: 0.8}] },
+                // 유럽
+                { name: '파리', country: '프랑스', lat: 48.8566, lng: 2.3522, temps: [{month: '1월', high: 7.2, low: 2.7}, {month: '2월', high: 8.3, low: 2.8}, {month: '3월', high: 12.2, low: 5.3}, {month: '4월', high: 15.6, low: 7.3}, {month: '5월', high: 19.6, low: 10.9}, {month: '6월', high: 22.7, low: 13.8}, {month: '7월', high: 25.2, low: 15.8}, {month: '8월', high: 25.0, low: 15.7}, {month: '9월', high: 21.1, low: 12.7}, {month: '10월', high: 16.3, low: 9.6}, {month: '11월', high: 10.8, low: 5.8}, {month: '12월', high: 7.5, low: 3.4}] },
+                { name: '런던', country: '영국', lat: 51.5074, lng: -0.1278, temps: [{month: '1월', high: 8.1, low: 2.3}, {month: '2월', high: 8.6, low: 2.1}, {month: '3월', high: 11.4, low: 3.9}, {month: '4월', high: 14.2, low: 5.5}, {month: '5월', high: 17.9, low: 8.8}, {month: '6월', high: 21.0, low: 11.9}, {month: '7월', high: 23.5, low: 13.9}, {month: '8월', high: 23.1, low: 13.7}, {month: '9월', high: 19.9, low: 11.4}, {month: '10월', high: 15.6, low: 8.4}, {month: '11월', high: 11.2, low: 5.2}, {month: '12월', high: 8.4, low: 2.7}] },
+                { name: '로마', country: '이탈리아', lat: 41.9028, lng: 12.4964, temps: [{month: '1월', high: 11.9, low: 3.1}, {month: '2월', high: 13.0, low: 3.5}, {month: '3월', high: 15.2, low: 5.2}, {month: '4월', high: 17.7, low: 7.5}, {month: '5월', high: 22.8, low: 11.6}, {month: '6월', high: 26.9, low: 15.3}, {month: '7월', high: 30.3, low: 18.0}, {month: '8월', high: 30.6, low: 18.1}, {month: '9월', high: 26.5, low: 14.8}, {month: '10월', high: 21.4, low: 10.7}, {month: '11월', high: 16.3, low: 6.9}, {month: '12월', high: 12.6, low: 4.2}] },
+                { name: '프라하', country: '체코', lat: 50.0755, lng: 14.4378, temps: [{month: '1월', high: 1.0, low: -4.0}, {month: '2월', high: 3.0, low: -3.0}, {month: '3월', high: 8.0, low: 0.0}, {month: '4월', high: 14.0, low: 4.0}, {month: '5월', high: 19.0, low: 8.0}, {month: '6월', high: 22.0, low: 11.0}, {month: '7월', high: 24.0, low: 13.0}, {month: '8월', high: 24.0, low: 13.0}, {month: '9월', high: 19.0, low: 9.0}, {month: '10월', high: 13.0, low: 5.0}, {month: '11월', high: 6.0, low: 1.0}, {month: '12월', high: 2.0, low: -2.0}] },
+                { name: '바르셀로나', country: '스페인', lat: 41.3851, lng: 2.1734, temps: [{month: '1월', high: 13.6, low: 4.7}, {month: '2월', high: 14.3, low: 5.4}, {month: '3월', high: 16.1, low: 7.4}, {month: '4월', high: 18.0, low: 9.4}, {month: '5월', high: 21.1, low: 12.8}, {month: '6월', high: 24.9, low: 16.8}, {month: '7월', high: 28.0, low: 19.8}, {month: '8월', high: 28.5, low: 20.2}, {month: '9월', high: 25.5, low: 17.4}, {month: '10월', high: 21.5, low: 13.5}, {month: '11월', high: 17.0, low: 8.6}, {month: '12월', high: 14.3, low: 5.7}] },
+                { name: '비엔나', country: '오스트리아', lat: 48.2082, lng: 16.3738, temps: [{month: '1월', high: 3.2, low: -1.9}, {month: '2월', high: 5.2, low: -0.9}, {month: '3월', high: 10.3, low: 2.4}, {month: '4월', high: 16.2, low: 6.3}, {month: '5월', high: 21.1, low: 10.7}, {month: '6월', high: 24.0, low: 14.0}, {month: '7월', high: 26.5, low: 15.9}, {month: '8월', high: 26.1, low: 15.7}, {month: '9월', high: 21.0, low: 11.8}, {month: '10월', high: 15.1, low: 7.1}, {month: '11월', high: 8.1, low: 3.0}, {month: '12월', high: 3.8, low: -0.8}] },
+                // 오세아니아 & 아프리카
+                { name: '시드니', country: '호주', lat: -33.8688, lng: 151.2093, temps: [{month: '1월', high: 25.9, low: 18.7}, {month: '2월', high: 25.8, low: 18.8}, {month: '3월', high: 24.7, low: 17.6}, {month: '4월', high: 22.4, low: 14.7}, {month: '5월', high: 19.5, low: 11.6}, {month: '6월', high: 17.0, low: 9.3}, {month: '7월', high: 16.3, low: 8.1}, {month: '8월', high: 17.8, low: 9.0}, {month: '9월', high: 20.0, low: 11.1}, {month: '10월', high: 22.1, low: 13.5}, {month: '11월', high: 23.6, low: 15.6}, {month: '12월', high: 25.2, low: 17.5}] },
+                { name: '멜버른', country: '호주', lat: -37.8136, lng: 144.9631, temps: [{month: '1월', high: 25.9, low: 14.3}, {month: '2월', high: 25.8, low: 14.6}, {month: '3월', high: 23.9, low: 13.2}, {month: '4월', high: 20.3, low: 10.8}, {month: '5월', high: 16.7, low: 8.6}, {month: '6월', high: 14.1, low: 6.9}, {month: '7월', high: 13.5, low: 6.0}, {month: '8월', high: 15.0, low: 6.7}, {month: '9월', high: 17.2, low: 8.0}, {month: '10월', high: 19.7, low: 9.5}, {month: '11월', high: 22.0, low: 11.2}, {month: '12월', high: 24.2, low: 12.9}] },
+                { name: '카이로', country: '이집트', lat: 30.0444, lng: 31.2357, temps: [{month: '1월', high: 18.9, low: 9.0}, {month: '2월', high: 20.4, low: 9.7}, {month: '3월', high: 23.5, low: 12.0}, {month: '4월', high: 28.3, low: 15.1}, {month: '5월', high: 32.0, low: 17.7}, {month: '6월', high: 33.9, low: 20.1}, {month: '7월', high: 34.7, low: 22.0}, {month: '8월', high: 34.2, low: 22.1}, {month: '9월', high: 32.6, low: 20.5}, {month: '10월', high: 29.2, low: 17.4}, {month: '11월', high: 24.8, low: 14.1}, {month: '12월', high: 20.3, low: 10.4}] },
+            ];
+
+            // 지도 초기화
+            const map = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }).addTo(map);
+
+            // DOM 요소
+            const modal = document.getElementById('weather-modal');
+            const modalCityName = document.getElementById('modal-city-name');
+            const modalTableBody = document.getElementById('modal-table-body');
+            const closeModal = document.getElementById('modal-close');
+            const searchInput = document.getElementById('search-input');
+            const citySelect = document.getElementById('city-select');
+            const messageBox = document.getElementById('message-box');
+            
+            const markers = {};
+
+            // 도시 데이터를 이름순으로 정렬
+            cityData.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+            // 드롭다운 및 마커 초기화
+            cityData.forEach(city => {
+                // 드롭다운 채우기
+                const option = document.createElement('option');
+                option.value = city.name;
+                option.textContent = city.name;
+                citySelect.appendChild(option);
+
+                // 마커 생성 (복제된 세계 포함)
+                [-360, 0, 360].forEach(offset => {
+                    const lng = city.lng + offset;
+                    const marker = L.marker([city.lat, lng]).addTo(map);
+                    marker.bindTooltip(city.name, { permanent: true, direction: 'top', className: 'city-label', offset: [0, -10] });
+                    marker.on('click', () => showCityWeather(city));
+                    if (offset === 0) {
+                        markers[city.name] = marker;
+                    }
+                });
+            });
+            
+            // 대륙 이름 데이터
+            const continentLabels = [
+                { name: '아시아', lat: 45, lng: 105 }, { name: '유럽', lat: 50, lng: 15 },
+                { name: '북아메리카', lat: 45, lng: -100 }, { name: '남아메리카', lat: -15, lng: -60 },
+                { name: '아프리카', lat: 10, lng: 20 }, { name: '오세아니아', lat: -25, lng: 135 }
+            ];
+
+            // 주요 국가 이름 데이터
+            const countryLabels = [
+                { name: '러시아', lat: 60, lng: 100 }, { name: '중국', lat: 35, lng: 105 },
+                { name: '일본', lat: 36, lng: 138 }, { name: '대한민국', lat: 36, lng: 128},
+                { name: '베트남', lat: 16, lng: 108 }, { name: '태국', lat: 15, lng: 100 },
+                { name: '필리핀', lat: 13, lng: 122 }, { name: '말레이시아', lat: 4, lng: 102 },
+                { name: '인도네시아', lat: -2, lng: 118 }, { name: '미국', lat: 38, lng: -97 },
+                { name: '캐나다', lat: 56, lng: -106 }, { name: '영국', lat: 54, lng: -2 },
+                { name: '프랑스', lat: 46, lng: 2 }, { name: '스페인', lat: 40, lng: -4 },
+                { name: '이탈리아', lat: 42, lng: 12 }, { name: '오스트리아', lat: 47.33, lng: 13.33 },
+                { name: '이집트', lat: 27, lng: 30 }, { name: '오스트레일리아', lat: -27, lng: 133 }
+            ];
+
+            // 대륙 및 국가 이름 표시
+            [...continentLabels, ...countryLabels].forEach(label => {
+                const className = continentLabels.includes(label) ? 'continent-label' : 'country-label';
+                [-360, 0, 360].forEach(offset => {
+                    L.tooltip({ permanent: true, direction: 'center', className: className })
+                     .setContent(label.name)
+                     .setLatLng([label.lat, label.lng + offset])
+                     .addTo(map);
+                });
+            });
+
+            // 함수: 도시 날씨 정보 표시
+            function showCityWeather(city) {
+                modalCityName.textContent = `${city.name} (${city.country})`;
+                modalTableBody.innerHTML = city.temps
+                    .filter((temp, index) => index % 2 === 0) // 홀수 달만 필터링 (index가 0, 2, 4...)
+                    .map(temp => `
+                    <tr>
+                        <td>${temp.month}</td>
+                        <td class="high-temp">${temp.high}°</td>
+                        <td class="low-temp">${temp.low}°</td>
+                    </tr>
+                `).join('');
+                modal.style.display = 'flex';
+            }
+            
+            // 함수: 알림 메시지 표시
+            function showMessage(message) {
+                messageBox.textContent = message;
+                messageBox.classList.add('show');
+                setTimeout(() => {
+                    messageBox.classList.remove('show');
+                }, 3000);
+            }
+
+            // 이벤트 리스너: 모달 닫기
+            closeModal.onclick = () => { modal.style.display = "none"; };
+            window.onclick = (event) => { if (event.target == modal) { modal.style.display = "none"; } };
+
+            // 이벤트 리스너: 도시 검색
+            searchInput.addEventListener('keyup', (event) => {
+                if (event.key !== 'Enter') return;
+                const searchTerm = event.target.value.toLowerCase().trim();
+                if (!searchTerm) return;
+                
+                const foundCity = cityData.find(city => city.name.toLowerCase() === searchTerm);
+                if (foundCity) {
+                    map.flyTo([foundCity.lat, foundCity.lng], 6); // 줌 레벨 조정
+                    markers[foundCity.name].fire('click');
+                    citySelect.value = foundCity.name;
+                } else {
+                    showMessage(`'${event.target.value}' 도시를 찾을 수 없습니다.`);
+                }
+                event.target.value = '';
+            });
+
+            // 이벤트 리스너: 도시 드롭다운 선택
+            citySelect.addEventListener('change', (event) => {
+                const cityName = event.target.value;
+                if (!cityName) return;
+
+                const foundCity = cityData.find(city => city.name === cityName);
+                if (foundCity) {
+                    map.flyTo([foundCity.lat, foundCity.lng], 6); // 줌 레벨 조정
+                    markers[foundCity.name].fire('click');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
