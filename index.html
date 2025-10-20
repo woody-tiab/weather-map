@@ -27,6 +27,7 @@
             height: 100vh;
             background-color: #f7f9fc;
             color: #333;
+            overflow-x: hidden; /* Prevent horizontal scrollbars */
         }
         
         /* 헤더 스타일 */
@@ -201,6 +202,36 @@
         #message-box.show {
             opacity: 1;
             transform: translate(-50%, 0);
+        }
+
+        /* 반응형 레이아웃 */
+        @media (max-width: 640px) {
+            header {
+                flex-direction: column;
+                gap: 0.75rem;
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.5em;
+            }
+
+            #controls {
+                flex-direction: column;
+                width: 100%;
+                gap: 0.5rem;
+            }
+
+            #city-select, #search-input {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            #message-box {
+                top: 1rem;
+                width: 90%;
+                text-align: center;
+            }
         }
 
     </style>
