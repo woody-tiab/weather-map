@@ -232,6 +232,10 @@
                 width: 90%;
                 text-align: center;
             }
+
+            #weather-modal-content {
+                width: 95%;
+            }
         }
 
     </style>
@@ -261,9 +265,9 @@
                 <table id="weather-table">
                     <thead>
                         <tr>
-                            <th>월</th>
-                            <th>최고기온(°C)</th>
-                            <th>최저기온(°C)</th>
+                            <th>날짜(월)</th>
+                            <th>최고기온(도)</th>
+                            <th>최저기온(도)</th>
                         </tr>
                     </thead>
                     <tbody id="modal-table-body"></tbody>
@@ -515,8 +519,8 @@
                     .map(temp => `
                     <tr>
                         <td>${temp.month}</td>
-                        <td class="high-temp">${temp.high}°</td>
-                        <td class="low-temp">${temp.low}°</td>
+                        <td class="high-temp">${temp.high}도</td>
+                        <td class="low-temp">${temp.low}도</td>
                     </tr>
                 `).join('');
                 modal.style.display = 'flex';
@@ -567,4 +571,5 @@
     </script>
 </body>
 </html>
+
 
